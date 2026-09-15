@@ -2,10 +2,15 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#5fc4d8" />
+<meta name="description" content="Une petite aventure paisible sur une île peuplée d'animaux." />
 <title>Cozy Bear Island</title>
 <style>
-  :root{ --brown:#725244; }
+  :root{
+    --brown:#725244; --cream:#fff9e9; --green:#78b98b; --coral:#df815d;
+    --shadow:0 10px 30px rgba(54,46,42,.2);
+  }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; height:100%; overflow:hidden; overscroll-behavior:none; }
   body{
@@ -16,9 +21,9 @@
   canvas{ display:block; position:fixed; inset:0; touch-action:none; }
 
   .glass{
-    background:rgba(255,249,233,.93);
+    background:rgba(255,249,233,.9);
     border:3px solid rgba(255,255,255,.75);
-    box-shadow:0 8px 24px rgba(73,59,52,.22);
+    box-shadow:var(--shadow); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   }
   #topbar{
     position:fixed; top:calc(12px + env(safe-area-inset-top)); left:50%;
@@ -27,9 +32,13 @@
   .pill{ padding:8px 14px; border-radius:999px; font-weight:900; font-size:13px; white-space:nowrap; }
   #title{ color:#fff; background:#78b98b; }
   #energyPill{ min-width:90px; text-align:center; }
+  #energyPill.low{ color:#a7473e; background:rgba(255,225,215,.94); animation:pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse{ 50%{ transform:scale(1.04); } }
 
   #tasks{ position:fixed; top:calc(70px + env(safe-area-inset-top)); left:12px; width:216px; padding:13px; border-radius:22px; z-index:10; }
   #inventory{ position:fixed; top:calc(70px + env(safe-area-inset-top)); right:12px; width:150px; padding:13px; border-radius:22px; z-index:10; }
+  #hudTools{ display:none; position:fixed; top:calc(61px + env(safe-area-inset-top)); right:10px; gap:7px; z-index:16; }
+  .hud-btn{ width:44px; height:44px; border:2px solid rgba(255,255,255,.8); border-radius:15px; background:rgba(255,249,233,.92); box-shadow:0 5px 16px rgba(54,46,42,.18); font-size:20px; }
   #tasks h2,#inventory h2{ margin:0 0 9px; font-size:15px; }
   .task{ margin:6px 0; padding:7px 9px; border-radius:12px; background:#f4ead4; font-size:12px; font-weight:800; transition:.25s; }
   .task.done{ color:#397852; background:#d8f1d5; text-decoration:line-through; }
@@ -84,6 +93,7 @@
     touch-action:none; display:grid; place-items:center;
   }
   .btn:active{ background:rgba(114,82,68,.95); }
+  button:focus-visible{ outline:4px solid rgba(255,209,102,.95); outline-offset:3px; }
   #action{
     position:fixed; right:24px; bottom:calc(40px + env(safe-area-inset-bottom));
     width:86px; height:86px; border-radius:50%;
@@ -97,10 +107,54 @@
   }
   #hint{ position:fixed; left:16px; bottom:calc(4px + env(safe-area-inset-bottom)); font-size:11px; font-weight:800; color:rgba(83,69,62,.75); z-index:10; }
   @media (min-width:900px) and (pointer:fine){ #pad,#action,#eatBtn{ opacity:.55; } }
+  @media (max-width:700px), (max-height:500px) and (pointer:coarse){
+    #topbar{ top:calc(7px + env(safe-area-inset-top)); width:calc(100% - 16px); gap:5px; }
+    #topbar .pill{ padding:6px 9px; font-size:11px; border-width:2px; }
+    #title{ display:none; }
+    #hudTools{ display:flex; }
+    #tasks,#inventory{ top:calc(112px + env(safe-area-inset-top)); transition:.22s ease; transform:translateY(-8px); opacity:0; pointer-events:none; }
+    #tasks{ left:10px; width:min(230px,calc(100vw - 20px)); }
+    #inventory{ right:10px; width:150px; }
+    #tasks.open,#inventory.open{ transform:none; opacity:1; pointer-events:auto; }
+    #prompt{ bottom:calc(120px + env(safe-area-inset-bottom)); max-width:calc(100vw - 130px); overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+    #dialogue{ bottom:calc(128px + env(safe-area-inset-bottom)); }
+    #pad{ left:10px; bottom:calc(15px + env(safe-area-inset-bottom)); grid-template-columns:repeat(3,49px); grid-template-rows:repeat(3,49px); }
+    #action{ right:18px; bottom:calc(25px + env(safe-area-inset-bottom)); width:76px; height:76px; }
+    #eatBtn{ right:25px; bottom:calc(113px + env(safe-area-inset-bottom)); width:58px; height:58px; }
+    #hint{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){ *,*::before,*::after{ animation:none!important; transition-duration:.01ms!important; } }
+
+  #natureTools{position:fixed;left:12px;bottom:220px;z-index:18;display:flex;gap:7px}
+  #natureTools button{border:2px solid #fff;border-radius:18px;padding:11px 14px;background:#fff9e9;color:#45664d;font-weight:900;min-height:44px;box-shadow:var(--shadow)}
+  #objective{font-size:12px;line-height:1.5;background:#e1efd8;padding:10px;border-radius:12px;margin-bottom:10px}
+  #action{font-size:13px;word-break:normal;padding:6px}
+  #toast{max-width:calc(100vw - 24px);text-align:center;border-radius:16px}
+  dialog{width:min(560px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:0;border:3px solid #fff;border-radius:26px;background:#fff9e9;color:#594b3d;box-shadow:0 24px 80px #263f4466;touch-action:pan-y;overscroll-behavior:contain}
+  dialog::backdrop{background:#24483788;backdrop-filter:blur(4px)}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px 20px 10px;position:sticky;top:0;background:#fff9e9;z-index:1}
+  .sheet-head h2{margin:0;font-size:22px;color:#45664d}
+  #sheetClose{min-width:44px;min-height:44px;border:0;background:#ecdfc7;border-radius:50%;font-size:22px;color:#594b3d}
+  #sheetBody{padding:0 20px 22px;line-height:1.55;font-size:15px}
+  #sheetBody h3{color:#45664d;margin:16px 0 6px;font-size:18px}
+  #sheetBody p{margin:8px 0}
+  #sheetBody button{min-height:44px;border:0;border-radius:13px;padding:10px 14px;background:#426e51;color:white;font:inherit;font-weight:bold;cursor:pointer;margin:5px 4px 5px 0}
+  #sheetBody button.secondary{background:#e8dfce;color:#594b3d}
+  #sheetBody button:disabled{opacity:.5;cursor:default}
+  .nature-card{border:1px solid #ddd5be;border-radius:17px;padding:13px;margin:12px 0;background:#fffdf5}
+  .nature-card small,.note{font-size:12px;color:#726851}
+  .nature-card a{color:#356544;text-underline-offset:3px}
+  .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#73805d;font-weight:bold}
+  .lesson-icon{font-size:36px;line-height:1.2}
+  .checklist{list-style:none;padding:0}.checklist li{padding:5px 0}
+  .meter{height:9px;border-radius:9px;background:#e8dfce;overflow:hidden;margin:10px 0}.meter span{display:block;background:#76a56b;height:100%}
+  #sheetFeedback{padding:10px;border-left:3px solid #8fa975;background:#edf3e5;margin:10px 0}
+  @media(max-width:700px){#natureTools{left:10px;bottom:auto;top:calc(62px + env(safe-area-inset-top))}#natureTools button{padding:8px 10px;font-size:12px}#sheetBody{padding:0 16px 18px}.sheet-head{padding:12px 16px 6px}.sheet-head h2{font-size:20px}}
+  @media(max-height:500px){#natureTools{bottom:auto;top:62px}dialog{max-height:calc(100dvh - 12px)}}
 </style>
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="game" role="img" aria-label="Île de Cozy Bear Island, explorée par un petit ours">Votre navigateur ne prend pas en charge Canvas.</canvas>
 
 <div id="topbar">
   <div id="title" class="pill glass">🐻 Cozy Bear Island</div>
@@ -111,7 +165,7 @@
 </div>
 
 <section id="tasks" class="glass">
-  <h2>📋 Missions du jour</h2>
+  <h2>🌱 Mon aventure</h2><div id="objective"></div><small>Petits plaisirs du jour</small>
   <div id="taskTrees" class="task">🌳 Secouer des arbres : 0/3</div>
   <div id="taskFish" class="task">🐟 Attraper des poissons : 0/2</div>
   <div id="taskTalk" class="task">💬 Saluer les voisins : 0/3</div>
@@ -127,7 +181,14 @@
   </div>
 </section>
 
-<div id="toast">Objet obtenu !</div>
+<div id="hudTools" aria-label="Panneaux de jeu">
+  <button type="button" id="tasksToggle" class="hud-btn" aria-label="Afficher les missions" aria-expanded="false">📋</button>
+  <button type="button" id="inventoryToggle" class="hud-btn" aria-label="Afficher le sac" aria-expanded="false">🎒</button>
+</div>
+
+<div id="natureTools"><button id="journalBtn" type="button">📖 Carnet</button><button id="projectBtn" type="button">🌻 Projet</button></div>
+<dialog id="natureSheet" aria-labelledby="sheetTitle"><div class="sheet-head"><h2 id="sheetTitle"></h2><button id="sheetClose" aria-label="Fermer" type="button">×</button></div><div id="sheetBody"></div></dialog>
+<div id="toast" role="status" aria-live="polite">Objet obtenu !</div>
 <div id="prompt" class="glass"><span class="key">E</span><span id="promptText">Interagir</span></div>
 <div id="dialogue" class="glass"><div id="speaker">Villageois</div><div id="dialogueText"></div></div>
 
@@ -139,12 +200,12 @@
 </div>
 
 <div id="pad">
-  <i></i><button class="btn" data-dir="up">▲</button><i></i>
-  <button class="btn" data-dir="left">◀</button><i></i><button class="btn" data-dir="right">▶</button>
-  <i></i><button class="btn" data-dir="down">▼</button><i></i>
+  <i></i><button type="button" class="btn" data-dir="up" aria-label="Aller en haut">▲</button><i></i>
+  <button type="button" class="btn" data-dir="left" aria-label="Aller à gauche">◀</button><i></i><button type="button" class="btn" data-dir="right" aria-label="Aller à droite">▶</button>
+  <i></i><button type="button" class="btn" data-dir="down" aria-label="Aller en bas">▼</button><i></i>
 </div>
-<button id="action" class="btn">E</button>
-<button id="eatBtn" class="btn">🍎</button>
+<button type="button" id="action" class="btn" aria-label="Interagir">E</button>
+<button type="button" id="eatBtn" class="btn" aria-label="Manger un fruit">🍎</button>
 <div id="hint">WASD / flèches · E : interagir · F : manger · glisse pour marcher</div>
 
 <script>
@@ -185,7 +246,7 @@ const cam = { x: -150, y: 120 };
 const player = { x: -150, y: 120, vx: 0, vy: 0, face: 1, walk: 0 };
 
 const trees = [[-300,120],[-230,-40],[-190,180],[-160,-190],[140,190],[300,60],[250,-150],[80,-210],[330,-40]]
-  .map(([x,y]) => ({ x, y, used:false, shake:0, s:0.92 + Math.random()*0.18 }));
+  .map(([x,y],i) => ({ x, y, variety:["gala","golden","granny"][i%3], used:false, shake:0, s:0.92 + (i%4)*0.05 }));
 
 const villagerLines = {
   Lili: [
@@ -225,13 +286,15 @@ const fishSpots = [[-200,-1],[-90,1],[110,-1],[230,1]]
   .map(([y,s]) => ({ x: riverAt(y) + s*18, y, used:false, phase: Math.random()*6.28 }));
 
 const FLOWER_COLORS = ["#ff93a6","#ffdc69","#c59cff","#ffffff"];
+let worldSeed = 7319;
+function worldRandom(){ worldSeed = (Math.imul(1664525, worldSeed) + 1013904223) >>> 0; return worldSeed / 4294967296; }
 const flowers = [];
 while (flowers.length < 42){
-  const x = (Math.random()*2-1) * 370, y = (Math.random()*2-1) * 265;
+  const x = (worldRandom()*2-1) * 370, y = (worldRandom()*2-1) * 265;
   if (!walkable(x, y)) continue;
   if (Math.abs(x - riverAt(y)) < 55) continue;
   if (Math.hypot(x-230, y-110) < 125) continue;
-  flowers.push({ x, y, picked:false, c: FLOWER_COLORS[(Math.random()*4)|0], phase: Math.random()*6.28 });
+  flowers.push({ x, y, picked:false, c: FLOWER_COLORS[(worldRandom()*4)|0], phase: worldRandom()*6.28 });
 }
 
 /* Maison du joueur */
@@ -245,6 +308,139 @@ const state = {
 };
 let drops = [], confetti = [], celebrated = false, busy = 0, minutes = 8*60;
 let lastSave = 0;
+
+/* ============ Atelier nature : découvrir, expérimenter, transmettre ============ */
+const APPLES = {
+  gala: {name:"Gala", color:"#e67b54", icon:"🍎", text:"La Gala est douce, juteuse et croquante. Sa peau mêle le jaune et le rouge. Elle se mange notamment crue, au goûter ou en salade.", source:"https://www.applesfromny.com/varieties/gala/"},
+  golden: {name:"Golden Delicious", color:"#f2cf56", icon:"🍏", text:"La Golden Delicious a une peau jaune et une saveur douce. On peut la croquer ou la cuisiner en compote. Toutes les pommes n’ont donc pas le même goût ni la même couleur.", source:"https://www.applesfromny.com/varieties/golden-delicious/"},
+  granny: {name:"Granny Smith", color:"#9bcc58", icon:"🍏", text:"La Granny Smith est une pomme verte, croquante et acidulée. Elle convient aussi à la cuisson et aux salades. Une pomme verte peut être mûre : sa variété compte !", source:"https://www.applesfromny.com/varieties/granny-smith/"}
+};
+const GARDEN_SOURCE = "https://www.rhs.org.uk/education-learning/children-young-people/family-activities/grow-it/sunflower";
+const LESSONS = {
+  seed:{name:"De la graine à la plante",icon:"🌱",text:"Pour semer un tournesol, prépare une terre émiettée, dépose la graine, recouvre-la légèrement puis arrose doucement. Au jardin, suis la profondeur et les distances indiquées sur le sachet.",source:GARDEN_SOURCE},
+  light:{name:"Le bon emplacement",icon:"☀️",text:"Le tournesol apprécie le plein soleil et une terre bien drainée : l’eau en excès doit pouvoir s’écouler. Les besoins varient selon les plantes ; toutes ne préfèrent pas le même emplacement.",source:GARDEN_SOURCE},
+  water:{name:"Observer avant d’arroser",icon:"💧",text:"Vérifie l’humidité sous la surface de la terre. Si elle est encore humide, attends ; si elle est sèche, arrose au pied. La pluie peut déjà apporter de l’eau. Arroser plus n’est pas toujours mieux.",source:"https://www.rhs.org.uk/garden-jobs/watering"},
+  bloom:{name:"Grandir prend du temps",icon:"🌻",text:"Le tournesol passe par la graine, la jeune pousse, le bouton floral puis la fleur. Dans la réalité, ce parcours prend des semaines à des mois selon la variété et les conditions, jamais quelques secondes.",source:GARDEN_SOURCE}
+};
+function newNature(){return {seen:[],lessons:[],planted:false,sunny:false,moisture:0,growth:0,checked:false,grown:false,built:false,lantern:false,welcome:false};}
+let nature = newNature();
+const garden = {get x(){return nature.built?85:nature.planted&&!nature.sunny?-120:-95;},get y(){return nature.built?-60:75;}};
+const readingCorner = {x:130,y:-85};
+const sheet = document.getElementById("natureSheet");
+const sheetBody = document.getElementById("sheetBody");
+let sheetReturnFocus = null;
+function clearControls(){
+  Object.keys(keys).forEach(k=>keys[k]=false);
+  Object.keys(pad).forEach(k=>pad[k]=false);
+  stick=null; player.vx=0; player.vy=0;
+}
+function openSheet(title, html){
+  clearControls();
+  document.getElementById("dialogue").classList.remove("visible");
+  document.getElementById("sheetTitle").textContent=title;
+  sheetBody.innerHTML=html;
+  if(!sheet.open){sheetReturnFocus=document.activeElement;sheet.showModal();}
+  document.getElementById("sheetClose").focus();
+}
+function closeSheet(){sheet.close();}
+document.getElementById("sheetClose").addEventListener("click",closeSheet);
+sheet.addEventListener("close",()=>{clearControls();saveGame();sheetReturnFocus?.focus();});
+function actionButton(label,action,disabled=false,secondary=false){return `<button type="button" data-nature="${action}" ${disabled?'disabled':''} class="${secondary?'secondary':''}">${label}</button>`;}
+function factCard(entry){return `<article class="nature-card"><div class="lesson-icon">${entry.icon}</div><h3>${entry.name}</h3><p>${entry.text}</p><small><a href="${entry.source}" target="_blank" rel="noopener noreferrer">Source : ${entry.source.includes('rhs.org')?'Royal Horticultural Society':'New York Apple Association'}</a></small></article>`;}
+function unlockLesson(id){if(!nature.lessons.includes(id)){nature.lessons.push(id);toast("📖 Nouvelle découverte : "+LESSONS[id].name);}}
+function discoverApple(id){
+  if(nature.seen.includes(id))return;
+  nature.seen.push(id);
+  openSheet("Une nouvelle pomme !",`<div class="eyebrow">Verger · ${nature.seen.length}/3 variétés découvertes</div>${factCard(APPLES[id])}<p>Observe les autres pommiers : leurs fruits ont des couleurs différentes.</p>${actionButton("Continuer l’exploration","close")}`);
+}
+function objectiveText(){
+  if(!nature.planted)return "Lili t’a confié une graine. Rejoins la jardinière 🌱 à droite de ta cabane pour la semer.";
+  if(!nature.sunny)return "Ton tournesol préfère le soleil. Déplace la jardinière vers l’emplacement ensoleillé.";
+  if(!nature.grown)return nature.moisture<=0?"La terre du tournesol est sèche. Retourne l’observer et l’arroser.":"Ton tournesol grandit. Explore le verger et découvre ses trois variétés de pommes.";
+  if(nature.seen.length<3)return `Découvre encore ${3-nature.seen.length} variété(s) de pommes en secouant d’autres arbres.`;
+  if(!nature.built)return "Rejoins le panneau 🌻 au nord du pont, côté village : le projet indique le bois et les pièces nécessaires au coin de lecture.";
+  return nature.lantern?"Ton jardin des découvertes est achevé. Observe, partage et profite de ton île !":"Lili lit dans ton jardin ! Pépé propose maintenant une lanterne pour l’éclairer.";
+}
+function openJournal(){
+  const appleCards=Object.entries(APPLES).map(([id,e])=>nature.seen.includes(id)?factCard(e):`<article class="nature-card"><h3>🔎 Pomme à découvrir</h3><p>Indice : cherche un arbre portant des fruits ${id==='golden'?'jaunes':id==='granny'?'verts':'rouges'}.</p></article>`).join('');
+  const lessons=Object.entries(LESSONS).map(([id,e])=>nature.lessons.includes(id)?factCard(e):`<article class="nature-card"><h3>🌱 Une découverte à faire au jardin</h3><p>${id==='seed'?'Sème ta première graine.':id==='light'?'Choisis un emplacement pour le tournesol.':id==='water'?'Vérifie la terre et décide s’il faut arroser.':'Observe ton tournesol jusqu’à la floraison.'}</p></article>`).join('');
+  openSheet("Mon carnet de nature",`<div class="eyebrow">Observer · comprendre · essayer</div><p>${nature.seen.length+ nature.lessons.length}/7 découvertes conservées. Tu peux les relire à tout moment.</p><h3>Les pommes du verger</h3>${appleCards}<h3>Faire pousser un tournesol</h3>${lessons}<p class="note">Les sources s’ouvrent en ligne. Le jeu et les fiches déjà incluses fonctionnent sans connexion. Les dessins sont stylisés ; ils ne constituent pas un guide d’identification botanique.</p>`);
+}
+function openGarden(feedback=""){
+  const stage=!nature.planted?"Une graine à semer":nature.growth<25?"Graine":nature.growth<55?"Jeune pousse":nature.growth<90?"Bouton floral":"Tournesol en fleur";
+  let buttons;
+  if(!nature.planted) buttons=`<p>Lili : « Choisissons où installer notre tournesol. Tu pourras déplacer la jardinière pour comparer. »</p>${actionButton("Semer au soleil","plant-sun")}${actionButton("Essayer à l’ombre","plant-shade",false,true)}`;
+  else if(nature.grown)buttons=`<p>Tu as accompagné toute sa croissance ! Garde cette fleur vivante pour le jardin de Lili.</p>${actionButton("Voir le projet de Lili","project")}`;
+  else buttons=`<p>Emplacement : <strong>${nature.sunny?'ensoleillé':'à l’ombre'}</strong>. Terre : <strong>${nature.checked?(nature.moisture>0?'encore humide':'sèche'):'à observer'}</strong>.</p>${actionButton("Vérifier la terre","check")}${actionButton("Arroser doucement","water",!nature.checked)}${!nature.sunny?actionButton("Déplacer au soleil","sun"):''}<p class="note">Ferme ce panneau pour laisser le temps passer et explorer. La plante attend sans mourir quand tu quittes le jeu.</p>`;
+  openSheet("Le jardin de Lili",`<div class="eyebrow">Une expérience à vivre</div><h3>🌻 ${stage}</h3><div class="meter" role="progressbar" aria-label="Croissance du tournesol" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(nature.growth/90*100)}"><span style="width:${nature.growth/90*100}%"></span></div>${feedback?`<div id="sheetFeedback" role="status">${feedback}</div>`:''}${buttons}<article class="nature-card"><strong>Dans le jeu / dans la nature</strong><p>La croissance est accélérée à environ 90 secondes actives dans de bonnes conditions. Dans la réalité, il faut des semaines à des mois. Le soleil, la terre et l’eau restent les éléments à observer.</p></article>`);
+}
+function canBuild(){return nature.grown && nature.seen.length===3 && state.inv.wood>=5 && state.coins>=20;}
+function openProject(){
+  const conditions=[[nature.seen.length===3,`Observer trois variétés de pommes (${nature.seen.length}/3)`],[nature.grown,"Faire fleurir le tournesol"],[state.inv.wood>=5,`Réunir du bois (${state.inv.wood}/5)`],[state.coins>=20,`Prévoir 20 pièces (${state.coins})`]];
+  openSheet("Un coin pour apprendre",`<div class="eyebrow">Projet de Lili · ${nature.built?'Réalisé !':'Le jardin des découvertes'}</div><p>${nature.built?'Lili : « Ce jardin raconte ce que tu as appris. Maintenant, nous pouvons lire et observer les fleurs ensemble. Merci ! »':'Lili rêve d’un banc, d’un tournesol et d’un petit panneau sur les pommes. Chaque découverte nous rapproche de ce lieu.'}</p>${nature.built?'<div class="lesson-icon">🌻 🐰 📖</div>':`<ul class="checklist">${conditions.map(([ok,text])=>`<li>${ok?'✅':'○'} ${text}</li>`).join('')}</ul><p class="note">Construction au panneau 🌻, au nord du pont sur la rive du village. Les 5 bois et 20 pièces seront utilisés ; tes découvertes restent dans ton carnet.</p>${actionButton("Construire le coin de lecture","build",!canBuild()||Math.hypot(player.x-readingCorner.x,player.y-readingCorner.y)>70)}`}${actionButton("Ouvrir mon carnet","journal",false,true)}`);
+}
+const PRICES={fruit:9,fish:22,wood:14,flowers:5};
+const ITEMS={fruit:"fruit",fish:"poisson",wood:"bois",flowers:"fleur"};
+function openShop(feedback=""){
+  openSheet("L’étal de Pépé",`<div class="eyebrow">${state.coins} pièces · Tu choisis ce que tu vends</div>${feedback?`<div id="sheetFeedback" role="status">${feedback}</div>`:''}<p>Les fruits peuvent être mangés ; garde 5 bois pour le jardin de Lili.</p>${Object.keys(PRICES).map(k=>`<div class="nature-card"><strong>${ITEMS[k]} · ${state.inv[k]} dans le sac</strong><br>${actionButton(`Vendre 1 ${ITEMS[k]} · +${PRICES[k]} pièces`,`sell-${k}`,state.inv[k]<1)}</div>`).join('')}<h3>Une lumière pour le jardin</h3><p>Une lanterne éclairera le coin de lecture à la nuit tombée.</p>${actionButton(nature.lantern?'Lanterne installée':'Acheter la lanterne · 50 pièces','lantern',nature.lantern||!nature.built||state.coins<50)}${!nature.built?'<p class="note">À débloquer en construisant le coin de lecture.</p>':''}`);
+}
+sheetBody.addEventListener("click",e=>{
+  const button=e.target.closest("button[data-nature]");if(!button||button.disabled)return;
+  const action=button.dataset.nature;
+  if(action==='close'){closeSheet();return;}
+  if(action==='journal'){openJournal();return;}
+  if(action==='project'){openProject();return;}
+  if(action.startsWith('plant-')&&!nature.planted){
+    nature.planted=true;nature.sunny=action==='plant-sun';unlockLesson('seed');
+    if(nature.sunny)unlockLesson('light');
+    openGarden(nature.sunny?"La graine est semée dans une terre drainante, au soleil. Vérifie maintenant la terre avant d’arroser.":"À l’ombre, ce tournesol manquera de lumière pour bien grandir. Tu peux déplacer la jardinière au soleil, sans perdre ta graine.");
+  }else if(action==='check'){
+    nature.checked=true;unlockLesson('water');openGarden(nature.moisture>0?"La terre est encore humide sous la surface. Inutile d’ajouter de l’eau pour le moment.":"La terre est sèche sous la surface. Un arrosage doux au pied est utile.");
+  }else if(action==='water'&&nature.checked&&nature.planted){
+    if(nature.moisture>0)openGarden("Tu as bien observé : la terre est déjà humide. L’arrosoir reste fermé pour éviter l’excès d’eau.");
+    else{nature.moisture=55;nature.checked=false;openGarden("La terre est maintenant humide. L’eau excédentaire peut s’écouler. Pars explorer pendant que la plante grandit !");}
+  }else if(action==='sun'&&nature.planted){nature.sunny=true;unlockLesson('light');openGarden("La jardinière est maintenant au soleil. Le tournesol y trouve la lumière qui lui convient.");
+  }else if(action==='build'&&!nature.built&&canBuild()&&Math.hypot(player.x-readingCorner.x,player.y-readingCorner.y)<=70){
+    state.inv.wood-=5;state.coins-=20;nature.built=true;const lili=villagers.find(v=>v.name==='Lili');lili.x=readingCorner.x+18;lili.y=readingCorner.y+16;partySound();openProject();toast("🌻 Ton jardin des découvertes prend vie !");
+  }else if(action.startsWith('sell-')){
+    const k=action.slice(5);if(Object.hasOwn(PRICES,k)&&state.inv[k]>0){state.inv[k]--;state.coins+=PRICES[k];openShop(`Vendu : 1 ${ITEMS[k]}. Le reste de ton sac est conservé.`);}
+  }else if(action==='lantern'&&nature.built&&!nature.lantern&&state.coins>=50){state.coins-=50;nature.lantern=true;openShop("La lanterne est installée près du banc. Reviens la voir à la nuit tombée !");}
+  refreshUI();saveGame();
+});
+document.getElementById("journalBtn").addEventListener("click",openJournal);
+document.getElementById("projectBtn").addEventListener("click",openProject);
+function updateGarden(dt){
+  if(!nature.planted||nature.grown)return;
+  if(weather==='rain'||weather==='storm')nature.moisture=Math.max(nature.moisture,35);
+  const before=nature.growth;
+  if(nature.sunny&&nature.moisture>0)nature.growth=Math.min(90,nature.growth+dt);
+  nature.moisture=Math.max(0,nature.moisture-dt);
+  if(before<25&&nature.growth>=25)toast("🌱 La première pousse apparaît dans ton jardin !");
+  if(before<55&&nature.growth>=55)toast("🌿 Ton tournesol forme un bouton floral !");
+  if(nature.growth>=90){nature.grown=true;unlockLesson('bloom');dingSound();saveGame();}
+}
+function drawNature(t){
+  const gx=sx(garden.x),gy=sy(garden.y),s=ZOOM;
+  if(nature.planted){ellipse(gx,gy+2*s,39*s,18*s,nature.sunny?"rgba(255,224,130,.4)":"rgba(40,60,70,.22)");}
+  ellipse(gx,gy+4*s,29*s,12*s,"#ac7953");ellipse(gx,gy,27*s,10*s,nature.moisture>0?"#624934":"#947351");
+  if(nature.planted){
+    const height=(nature.growth<25?5:nature.growth<55?25:45)*s;
+    ctx.strokeStyle="#407846";ctx.lineWidth=4*s;ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(gx,gy-height);ctx.stroke();
+    if(nature.growth>=25){ellipse(gx-6*s,gy-height*.5,8*s,4*s,"#60a762");ellipse(gx+7*s,gy-height*.7,9*s,4*s,"#478f55");}
+    if(nature.grown){for(let i=0;i<10;i++){const a=i*Math.PI/5;circle(gx+Math.cos(a)*10*s,gy-height+Math.sin(a)*10*s,5*s,"#ffd46b");}circle(gx,gy-height,7*s,"#785136");}
+    else if(nature.growth>=55)circle(gx,gy-height,6*s,"#76a34e");
+  }
+  ctx.textAlign="center";ctx.font=`bold ${12*s}px sans-serif`;ctx.fillStyle="#365b3f";ctx.fillText(nature.grown?"Tournesol en fleur":!nature.planted?"🌱 Jardin de Lili":nature.moisture<=0?"💧 Terre sèche":"🌱 Ça pousse",gx,gy+25*s);
+  const x=sx(readingCorner.x),y=sy(readingCorner.y);
+  if(!nature.built){ctx.fillStyle="#9b7149";ctx.fillRect(x-3*s,y-35*s,6*s,35*s);ctx.fillStyle="#fff0cc";ctx.fillRect(x-28*s,y-52*s,56*s,26*s);ctx.font=`${19*s}px sans-serif`;ctx.fillText("🌻",x,y-32*s);}
+  else{
+    ellipse(x,y+8*s,60*s,25*s,"#dcd0a0");ctx.fillStyle="#93623f";ctx.fillRect(x-33*s,y-19*s,66*s,10*s);ctx.fillRect(x-33*s,y-37*s,66*s,12*s);ctx.fillRect(x-25*s,y-9*s,6*s,15*s);ctx.fillRect(x+19*s,y-9*s,6*s,15*s);
+    ctx.fillStyle="#fff4d6";ctx.fillRect(x-15*s,y-41*s,28*s,6*s);
+    for(let i=0;i<4;i++)drawFlower({x:readingCorner.x-52+i*32,y:readingCorner.y+36,picked:false,c:["#ffcf6b","#f5a3bc"][i%2],phase:i},t);
+    if(nature.lantern){ctx.fillStyle="#886746";ctx.fillRect(x-52*s,y-50*s,4*s,55*s);ctx.fillStyle="#ffe4a0";ctx.fillRect(x-59*s,y-55*s,18*s,17*s);}
+  }
+  ctx.textAlign="left";
+}
 
 /* ============ Météo dynamique ============ */
 const WEATHERS = ["sunny", "cloudy", "rain", "storm"];
@@ -297,7 +493,7 @@ function updateWeather(dt){
     if (next !== weather) setWeather(next);
   }
 
-  if (weatherTransition >= 1) weather = targetWeather;
+  if (weatherTransition >= 1 && weather !== targetWeather) weather = targetWeather;
 
   const isRaining = weather === "rain" || weather === "storm" || (targetWeather === "rain" || targetWeather === "storm");
   const intensity = weather === "storm" ? 1.4 : (weather === "rain" ? 1 : 0.4);
@@ -387,7 +583,7 @@ const rainSound = () => {
 };
 
 /* ============ UI ============ */
-let toastT = null, dialT = null;
+let toastT = null, dialT = null, lastUISignature = "";
 function toast(txt){
   const el = document.getElementById("toast");
   el.textContent = txt; el.classList.add("show");
@@ -401,6 +597,12 @@ function say(name, txt){
   clearTimeout(dialT); dialT = setTimeout(() => box.classList.remove("visible"), 4800);
 }
 function refreshUI(){
+  const objective=document.getElementById("objective"), nextObjective=objectiveText();
+  if(objective.textContent!==nextObjective)objective.textContent=nextObjective;
+  const signature = [state.trees,state.fish,state.talked,state.coins,state.inv.fruit,state.inv.fish,
+    state.inv.wood,state.inv.flowers,Math.round(state.energy),weather,celebrated].join("|");
+  if (signature === lastUISignature) return;
+  lastUISignature = signature;
   const t = document.getElementById("taskTrees"),
         f = document.getElementById("taskFish"),
         v = document.getElementById("taskTalk");
@@ -415,7 +617,9 @@ function refreshUI(){
   document.getElementById("fishCount").textContent = state.inv.fish;
   document.getElementById("woodCount").textContent = state.inv.wood;
   document.getElementById("flowerCount").textContent = state.inv.flowers;
-  document.getElementById("energyPill").textContent = `⚡ ${Math.round(state.energy)}`;
+  const energyPill = document.getElementById("energyPill");
+  energyPill.textContent = `⚡ ${Math.round(state.energy)}`;
+  energyPill.classList.toggle("low", state.energy < 25);
   document.getElementById("weatherPill").textContent = weatherLabel();
 
   const eatBtn = document.getElementById("eatBtn");
@@ -439,12 +643,15 @@ function celebrate(){
   toast("🏆 Toutes les missions sont terminées !");
   setTimeout(() => {
     document.getElementById("celebration").classList.remove("visible");
+    confetti.length = 0;
   }, 5200);
 }
 
 /* ============ Sauvegarde ============ */
 function saveGame(){
   const data = {
+    version:3, nature,
+    flowerLayout:flowers.map(f=>({x:f.x,y:f.y,c:f.c,phase:f.phase})),
     player: { x: player.x, y: player.y },
     state,
     weather,
@@ -457,22 +664,38 @@ function saveGame(){
     villagers: villagers.map(v => v.talked),
     houseRest: house.restUsed
   };
-  try { localStorage.setItem("cozyBearIsland_v2", JSON.stringify(data)); } catch(e){}
+  try { localStorage.setItem("cozyBearIsland_v3", JSON.stringify(data)); } catch(e){}
 }
 function loadGame(){
   try {
-    const raw = localStorage.getItem("cozyBearIsland_v2");
+    const raw = localStorage.getItem("cozyBearIsland_v3") || localStorage.getItem("cozyBearIsland_v2");
     if (!raw) return;
     const data = JSON.parse(raw);
-    if (data.player){ player.x = data.player.x; player.y = data.player.y; cam.x = player.x; cam.y = player.y; }
-    if (data.state) Object.assign(state, data.state);
-    if (data.weather) weather = data.weather;
-    if (typeof data.minutes === "number") minutes = data.minutes;
-    if (data.celebrated) celebrated = data.celebrated;
-    if (data.trees) trees.forEach((t,i) => t.used = !!data.trees[i]);
-    if (data.fishSpots) fishSpots.forEach((s,i) => s.used = !!data.fishSpots[i]);
-    if (data.flowers) flowers.forEach((f,i) => f.picked = !!data.flowers[i]);
-    if (data.villagers) villagers.forEach((v,i) => v.talked = !!data.villagers[i]);
+    if (data.player && Number.isFinite(data.player.x) && Number.isFinite(data.player.y) && walkable(data.player.x,data.player.y)){ player.x = data.player.x; player.y = data.player.y; cam.x = player.x; cam.y = player.y; }
+    if (data.state){
+      for(const k of ["trees","fish","talked","coins","day","energy"])
+        if(Number.isFinite(data.state[k]))state[k]=Math.max(0,data.state[k]);
+      for(const k of Object.keys(state.inv))
+        if(Number.isFinite(data.state.inv?.[k]))state.inv[k]=Math.max(0,Math.floor(data.state.inv[k]));
+      state.energy=Math.min(100,state.energy);state.day=Math.max(1,Math.floor(state.day));
+    }
+    if(data.nature && typeof data.nature==='object'){
+      for(const k of ["planted","sunny","checked","grown","built","lantern","welcome"])nature[k]=data.nature[k]===true;
+      nature.seen=[...new Set(Array.isArray(data.nature.seen)?data.nature.seen:[])].filter(k=>Object.hasOwn(APPLES,k));
+      nature.lessons=[...new Set(Array.isArray(data.nature.lessons)?data.nature.lessons:[])].filter(k=>Object.hasOwn(LESSONS,k));
+      nature.growth=Number.isFinite(data.nature.growth)?Math.max(0,Math.min(90,data.nature.growth)):0;
+      nature.moisture=Number.isFinite(data.nature.moisture)?Math.max(0,Math.min(55,data.nature.moisture)):0;
+      if(nature.built){const lili=villagers.find(v=>v.name==='Lili');lili.x=readingCorner.x+18;lili.y=readingCorner.y+16;}
+    }
+    if(Array.isArray(data.flowerLayout)&&data.flowerLayout.length===flowers.length)
+      data.flowerLayout.forEach((f,i)=>{if(Number.isFinite(f.x)&&Number.isFinite(f.y)&&walkable(f.x,f.y)){flowers[i].x=f.x;flowers[i].y=f.y;if(FLOWER_COLORS.includes(f.c))flowers[i].c=f.c;}});
+    if (WEATHERS.includes(data.weather)){ weather = data.weather; targetWeather = data.weather; weatherTransition = 1; }
+    if (Number.isFinite(data.minutes)) minutes = ((data.minutes%1440)+1440)%1440;
+    celebrated = data.celebrated === true;
+    if (Array.isArray(data.trees)) trees.forEach((t,i) => t.used = !!data.trees[i]);
+    if (Array.isArray(data.fishSpots)) fishSpots.forEach((s,i) => s.used = !!data.fishSpots[i]);
+    if (Array.isArray(data.flowers)) flowers.forEach((f,i) => f.picked = !!data.flowers[i]);
+    if (Array.isArray(data.villagers)) villagers.forEach((v,i) => v.talked = !!data.villagers[i]);
     if (data.houseRest) house.restUsed = data.houseRest;
   } catch(e){}
 }
@@ -486,13 +709,18 @@ function scanNear(){
     const d = Math.hypot(obj.x - player.x, obj.y - player.y);
     if (d < r && d < best){ best = d; near = { obj, label, type }; }
   };
-  trees.forEach(t => { if (!t.used) test(t, 62, "Secouer l'arbre", "tree"); });
+  trees.forEach(t => { if (!t.used) test(t, 62, "Récolter : " + APPLES[t.variety].name, "tree"); });
   fishSpots.forEach(s => { if (!s.used) test(s, 60, "Lancer la ligne", "fish"); });
-  villagers.forEach(v => test(v, 58, v.name === "Pépé" ? "Parler à Pépé (vendre)" : "Parler à " + v.name, "villager"));
+  villagers.forEach(v => test(v, 58, v.name === "Pépé" ? "Parler à Pépé (commerce)" : "Parler à " + v.name, "villager"));
   flowers.forEach(f => { if (!f.picked) test(f, 26, "Cueillir la fleur", "flower"); });
-  test(house, 55, "Se reposer dans la cabane", "house");
+  test(house, 45, "Se reposer dans la cabane", "house");
+  test(garden,45,"Observer le jardin","garden");
+  test(readingCorner,60,"Le projet de Lili","project");
 
   const p = document.getElementById("prompt");
+  const labels={tree:"Récolter",fish:"Pêcher",villager:"Parler",flower:"Cueillir",house:"Repos",garden:"Jardiner",project:"Projet"};
+  document.getElementById("action").textContent=near?labels[near.type]:"Explorer";
+  document.getElementById("action").setAttribute("aria-label",near?near.label:"Explorer");
   if (near && busy <= 0){
     document.getElementById("promptText").textContent = near.label;
     p.classList.add("visible");
@@ -501,11 +729,15 @@ function scanNear(){
 
 function interact(){
   unlockAudio();
-  if (busy > 0 || !near) return;
+  if (sheet.open || busy > 0 || !near) return;
+  if (navigator.vibrate) navigator.vibrate(18);
   const { obj, type } = near;
 
+  if(type === "garden"){openGarden();return;}
+  if(type === "project"){openProject();return;}
   if (type === "tree"){
     obj.used = true; obj.shake = 1.1;
+    discoverApple(obj.variety);
     state.trees = Math.min(3, state.trees + 1);
     const bonus = (weather === "rain" || weather === "storm") ? 1 : 0;
     state.inv.fruit += 3 + bonus;
@@ -543,32 +775,18 @@ function interact(){
       dingSound();
       toast(bonus ? `🐟 Poisson attrapé ! +${25+bonus} pièces (pluie)` : "🐟 Poisson attrapé ! +25 pièces");
       refreshUI();
+      saveGame();
     }, 1050);
   }
 
   else if (type === "villager"){
     const lines = obj.lines || ["Bonjour !"];
     const line = lines[(Math.random()*lines.length)|0];
-    say(obj.name, line);
+    say(obj.name, obj.name==='Lili'?(nature.built?"Ton jardin est devenu mon endroit préféré. Ouvre ton carnet : nous avons tant de choses à observer !":"J’ai laissé une graine près de ta cabane. Fais-la pousser ; nous créerons un jardin des découvertes ensemble !"):obj.name==='Milo'?"Garde cinq morceaux de bois : je t’aiderai à aménager le coin de lecture de Lili.":obj.name==='Noisette'?"La Gala est douce, la Granny Smith acidulée. Deux variétés, deux saveurs à découvrir !":line);
     tone(440,.08); tone(554,.1,.08);
 
     if (obj.name === "Pépé"){
-      const prices = { fruit: 9, fish: 22, wood: 14, flowers: 5 };
-      let total = 0;
-      for (const k of Object.keys(prices)){
-        if (state.inv[k] > 0){
-          const gain = state.inv[k] * prices[k];
-          total += gain;
-          state.inv[k] = 0;
-        }
-      }
-      if (total > 0){
-        state.coins += total;
-        toast(`💰 Pépé t'achète tout : +${total} pièces`);
-        dingSound();
-      } else {
-        toast("Tu n'as rien à vendre pour l'instant.");
-      }
+      openShop();
     } else {
       if (!obj.talked){
         obj.talked = true;
@@ -610,7 +828,8 @@ function interact(){
 
 function eatFruit(){
   unlockAudio();
-  if (state.inv.fruit <= 0 || busy > 0) return;
+  if (sheet.open || state.inv.fruit <= 0 || busy > 0) return;
+  if (navigator.vibrate) navigator.vibrate(12);
   state.inv.fruit--;
   state.energy = Math.min(100, state.energy + 28);
   tone(660,.1); tone(880,.12,.08);
@@ -622,6 +841,8 @@ function eatFruit(){
 /* ============ Entrées ============ */
 const keys = {};
 addEventListener("keydown", e => {
+  if(sheet.open)return;
+  if(e.target.closest("button,a,input,select") && ["Enter","Space"].includes(e.code))return;
   keys[e.code] = true;
   if (e.code === "KeyE" || e.code === "Space" || e.code === "Enter"){
     e.preventDefault(); if (!e.repeat) interact();
@@ -650,6 +871,27 @@ actionBtn.addEventListener("mousedown", e => { e.preventDefault(); interact(); }
 
 document.getElementById("eatBtn").addEventListener("touchstart", e => { e.preventDefault(); eatFruit(); }, { passive:false });
 document.getElementById("eatBtn").addEventListener("mousedown", e => { e.preventDefault(); eatFruit(); });
+
+/* Panneaux compacts sur mobile */
+function setupHudToggle(buttonId, panelId){
+  const button = document.getElementById(buttonId);
+  const panel = document.getElementById(panelId);
+  button.addEventListener("click", e => {
+    e.stopPropagation();
+    const willOpen = !panel.classList.contains("open");
+    document.querySelectorAll("#tasks.open,#inventory.open").forEach(el => el.classList.remove("open"));
+    document.querySelectorAll("#hudTools button").forEach(el => el.setAttribute("aria-expanded", "false"));
+    panel.classList.toggle("open", willOpen);
+    button.setAttribute("aria-expanded", String(willOpen));
+  });
+}
+setupHudToggle("tasksToggle", "tasks");
+setupHudToggle("inventoryToggle", "inventory");
+document.addEventListener("pointerdown", e => {
+  if (e.target.closest("#hudTools,#tasks,#inventory")) return;
+  document.querySelectorAll("#tasks.open,#inventory.open").forEach(el => el.classList.remove("open"));
+  document.querySelectorAll("#hudTools button").forEach(el => el.setAttribute("aria-expanded", "false"));
+});
 
 let stick = null;
 canvas.addEventListener("touchstart", e => {
@@ -686,7 +928,6 @@ function drawGround(t){
   ctx.fillRect(0, 0, W, H);
 
   clouds.forEach(c => {
-    c.x += c.speed * (0.3 + wind*0.7) * 0.016;
     if (c.x > W + 200) c.x = -250;
     const alpha = (weather === "sunny") ? 0.35 : 0.55;
     ctx.globalAlpha = alpha;
@@ -784,8 +1025,8 @@ function drawTree(t){
   circle(0, -114*s, 30*s, "#68c684");
   circle(-8*s, -104*s, 16*s, "rgba(255,255,255,.14)");
   if (!t.used){
-    circle(-22*s, -74*s, 7*s, "#e85f5f");
-    circle(20*s, -86*s, 7*s, "#e85f5f");
+    circle(-22*s, -74*s, 7*s, APPLES[t.variety].color);
+    circle(20*s, -86*s, 7*s, APPLES[t.variety].color);
   }
   ctx.restore();
 }
@@ -906,14 +1147,22 @@ function drawLeaves(){
 }
 
 /* ============ Boucle ============ */
-let last = performance.now(), T = 0;
+let last = performance.now(), T = 0, lastClockText = "";
 
 function step(now){
   requestAnimationFrame(step);
   const dt = Math.min((now - last) / 1000, 0.05);
-  last = now; T += dt;
+  last = now;
+  if(document.hidden)return;
+  if(sheet.open){drawWorld(0);return;}
+  T += dt;
+  updateGarden(dt);
 
   updateWeather(dt);
+  clouds.forEach(c => {
+    c.x += c.speed * (0.3 + wind*0.7) * dt;
+    if (c.x > W + 200) c.x = -250;
+  });
 
   let ix = 0, iy = 0;
   if (keys.KeyD || keys.ArrowRight || pad.right) ix += 1;
@@ -926,15 +1175,7 @@ function step(now){
   const len = Math.hypot(ix, iy);
   if (len > 1){ ix /= len; iy /= len; }
 
-  const movingNow = len > 0.1;
-  if (movingNow){
-    const drain = (weather === "rain" || weather === "storm") ? 3.8 : 2.6;
-    state.energy = Math.max(0, state.energy - drain * dt);
-  }
-
-  let SPEED = 185;
-  if (state.energy < 25) SPEED *= 0.55;
-  else if (state.energy < 50) SPEED *= 0.78;
+  const SPEED = 185; // La promenade reste libre, même avec peu d’énergie.
 
   player.vx += (ix*SPEED - player.vx) * Math.min(1, dt*12);
   player.vy += (iy*SPEED - player.vy) * Math.min(1, dt*12);
@@ -965,11 +1206,13 @@ function step(now){
 
   const prevMinutes = minutes;
   minutes = (minutes + dt * 3.2) % 1440;
-  if (celebrated && prevMinutes > 300 && minutes < 100){
+  /* Une nouvelle journée commence réellement à l'aube, pas à minuit. */
+  if (prevMinutes < 360 && minutes >= 360){
     state.trees = 0; state.fish = 0; state.talked = 0;
     trees.forEach(t => t.used = false);
     fishSpots.forEach(s => s.used = false);
     villagers.forEach(v => { if (v.name !== "Pépé") v.talked = false; });
+    flowers.forEach(f => f.picked = false);
     celebrated = false;
     state.day++;
     toast(`🌅 Jour ${state.day} — nouvelles missions !`);
@@ -978,10 +1221,26 @@ function step(now){
 
   const hh = Math.floor(minutes/60), mm = Math.floor(minutes%60);
   const isNight = hh >= 18 || hh < 6;
-  document.getElementById("clock").textContent =
-    `${isNight ? "🌙" : "☀️"} ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+  const clockText = `${isNight ? "🌙" : "☀️"} J${state.day} · ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+  if (clockText !== lastClockText){
+    document.getElementById("clock").textContent = clockText;
+    lastClockText = clockText;
+  }
 
+  drawWorld(dt);
+
+  lastSave += dt;
+  if (lastSave > 12){ lastSave = 0; saveGame(); }
+
+  refreshUI();
+}
+
+function drawWorld(dt){
+  const moving=Math.hypot(player.vx,player.vy)>12;
+  const hh=Math.floor(minutes/60);
+  const isNight=hh>=18||hh<6;
   drawGround(T);
+  drawNature(T);
 
   if (lightning > 0){
     ctx.fillStyle = `rgba(220,230,255,${lightning * 0.55})`;
@@ -1013,6 +1272,12 @@ function step(now){
     ctx.fillRect(0, 0, W, H);
   }
 
+  if(isNight && nature.lantern){
+    const lx=sx(readingCorner.x-50),ly=sy(readingCorner.y)-45*ZOOM;
+    const glow=ctx.createRadialGradient(lx,ly,2,lx,ly,70*ZOOM);
+    glow.addColorStop(0,"rgba(255,218,128,.5)");glow.addColorStop(1,"rgba(255,218,128,0)");
+    ellipse(lx,ly,70*ZOOM,55*ZOOM,glow);
+  }
   if (isNight && weather !== "storm" && Math.random() < 0.6){
     for (let i = 0; i < 3; i++){
       const fx = Math.random()*W, fy = Math.random()*H*0.7 + H*0.15;
@@ -1032,16 +1297,19 @@ function step(now){
     });
   }
 
-  if ((weather === "rain" || weather === "storm") && Math.random() < 0.08) rainSound();
+  if (!sheet.open && dt>0 && (weather === "rain" || weather === "storm") && Math.random() < 0.08) rainSound();
 
-  lastSave += dt;
-  if (lastSave > 12){ lastSave = 0; saveGame(); }
-
-  refreshUI();
 }
 
+addEventListener("blur",clearControls);
+addEventListener("pagehide",saveGame);
+document.addEventListener("visibilitychange",()=>{if(document.hidden){clearControls();saveGame();}});
 loadGame();
 refreshUI();
+if(!nature.welcome){
+  nature.welcome=true;
+  openSheet("Bienvenue au jardin des découvertes",`<div class="eyebrow">Cozy Bear Island · Une île pour apprendre</div><div class="lesson-icon">🐻 🌱 🍎</div><p>Lili rêve d’un petit jardin où lire et découvrir la nature. Aide-la en explorant l’île !</p><ol><li>Rejoins la jardinière à droite de ta cabane et sème ton tournesol.</li><li>Observe la terre et la lumière pour l’aider à grandir.</li><li>Découvre trois variétés de pommes et construis le coin de lecture.</li></ol><p>Déplace-toi avec les flèches, le pavé tactile ou en glissant sur le terrain. Le bouton d’action change selon ce qui est près de toi.</p><p class="note">Le carnet 📖 garde tes découvertes. Prends ton temps : le jeu attend pendant la lecture.</p>${actionButton("Commencer mon aventure","close")}`);
+}
 requestAnimationFrame(step);
 </script>
 </body>
