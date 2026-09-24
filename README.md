@@ -6,8 +6,8 @@ Une aventure paisible et éducative en HTML5 Canvas, sans framework ni dépendan
 
 Ouvrir `index.html` dans un navigateur moderne. Le jeu fonctionne sans connexion ; les liens documentaires du carnet nécessitent Internet.
 
-- Clavier : WASD / flèches, E pour interagir (et ferrer à la pêche), F pour manger un fruit, Échap pour ranger la canne.
-- Mobile : pavé directionnel ou glissement sur le terrain, bouton d’action contextuel. Marcher range la canne à pêche.
+- Clavier : WASD / flèches, Maj pour sprinter, E pour interagir (et ferrer à la pêche), F pour manger un fruit, C pour contempler, Échap pour ranger la canne.
+- Mobile : pavé directionnel ou glissement sur le terrain, bouton d’action contextuel, 💨 à maintenir pour sprinter, 🗺️ pour la carte. Marcher range la canne à pêche.
 - 📖 Carnet : relire les découvertes et leurs sources.
 - 🌻 Projet : consulter les étapes du jardin de Lili.
 - 📋 et 🎒 : panneaux repliables sur mobile.
@@ -36,6 +36,36 @@ Textes rédigés en français à partir de ces références consultées le 15 se
 - [Granny Smith — New York Apple Association](https://www.applesfromny.com/varieties/granny-smith/)
 - [Semer et cultiver un tournesol — Royal Horticultural Society](https://www.rhs.org.uk/education-learning/children-young-people/family-activities/grow-it/sunflower)
 - [Observer la terre et arroser — Royal Horticultural Society](https://www.rhs.org.uk/garden-jobs/watering)
+
+## La grande île
+
+L’île est environ sept fois plus vaste qu’à l’origine, avec une côte découpée et des régions distinctes :
+
+- forêt de pins à l’ouest, avec champignons et lucioles la nuit ;
+- falaises au nord, d’où tombe une cascade dans un lac bordé de roseaux et de nénuphars ;
+- verger de cerisiers et phare à rayures au nord-est et à l’est ;
+- champ de lavande au sud-est ;
+- plage de sable, coquillages, crabes et ponton avec sa barque au sud ;
+- trois ponts, des chemins de terre et des réverbères qui s’allument au crépuscule.
+
+Une carte (en haut à droite, ou 🗺️ sur mobile) situe l’ours et la prochaine lanterne de la course.
+
+### À contempler
+
+- Éclairage jour/nuit : aube rosée, coucher de soleil doré, nuit bleutée où les fenêtres, réverbères, lucioles et le faisceau tournant du phare creusent de vrais halos de lumière.
+- Mer animée : reflets scintillants, hauts-fonds turquoise, écume qui respire le long de la côte.
+- Cascade avec embruns, fontaine du village, fumée de cheminée, ombres de nuages qui glissent sur l’île.
+- Arc-en-ciel après la pluie, étoiles filantes la nuit.
+- Mode contemplation (🌅, C, le phare ou le banc face à la cascade) : la caméra recule, un ciel panoramique apparaît avec soleil ou lune, étoiles, nuages et parfois une aurore ; le temps défile dix fois plus vite.
+- Les arbres devant l’ours deviennent translucides.
+
+### Action
+
+- Défi de Milo (panneau 🏁 près de Milo) : passer par 9 lanternes réparties sur l’île en moins de 55 secondes. Une flèche au bord de l’écran indique la suivante. Récompense selon le temps restant, record mémorisé.
+- Sprint : Maj ou 💨.
+- Album photo : 8 espèces (Machaon, Paon-du-jour, Citron, Azuré, crabe, grenouille, luciole, mouette), chacune avec ses heures et son lieu. Les papillons s’envolent si l’on arrive trop près ou en sprintant, les crabes s’enfouissent, les grenouilles plongent, les mouettes s’envolent. Première photo d’une espèce : 20 pièces.
+- Étoile filante : appuyer sur E pendant son passage pour faire un vœu (pièces, pommes ou énergie).
+- Coquillages à ramasser sur la plage (12 pièces chez Pépé), renouvelés à l’aube.
 
 ## Autres fonctionnalités
 
@@ -69,7 +99,7 @@ Depuis le dossier du projet :
 node --test tests/nature.test.cjs
 ```
 
-Vingt tests sans dépendance (Node 18+) couvrent le démarrage et la pause, les conditions de croissance, la pluie, les découvertes, les ventes sélectives, le paiement unique de la construction et des outils, les demandes des voisins et l’amitié, le renouvellement à l’aube, la pêche d’adresse, l’énergie, les collisions, la restauration de sauvegarde, la migration v2, la marche et les valeurs invalides.
+Trente et un tests sans dépendance (Node 18+) couvrent le démarrage et la pause, les conditions de croissance, la pluie, les découvertes, les ventes sélectives, le paiement unique de la construction et des outils, les demandes des voisins et l’amitié, le renouvellement à l’aube, la pêche d’adresse, l’énergie, les collisions, la restauration de sauvegarde, la migration v2, la marche et les valeurs invalides, ainsi que la grande île (zones interdites, ponts, ponton), le décor, le sprint, la course, l’album photo, les coquillages, la contemplation et les vœux.
 
 Ces tests exécutent le script avec un DOM et un Canvas simulés : ils ne remplacent pas un essai visuel et tactile sur appareil réel. Des captures Chromium (bureau 1280 px et téléphone 390 px) ont été vérifiées pour la pêche, les demandes et l’étal ; un essai tactile sur appareil réel reste à faire.
 

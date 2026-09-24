@@ -16,7 +16,7 @@ function makeElement(){
       toggle(c, on){ (on ?? !this._s.has(c)) ? this._s.add(c) : this._s.delete(c); }, contains(c){ return this._s.has(c); } },
     listeners:{},
     setAttribute(){}, addEventListener(type, fn){ (this.listeners[type] ??= []).push(fn); }, focus(){}, closest(){ return null; },
-    getContext(){ return new Proxy({}, { get:(t, k) => k in t ? t[k] : (k === "createRadialGradient" ? () => ({ addColorStop(){} }) : () => {}), set:(t, k, v) => (t[k] = v, true) }); },
+    getContext(){ return new Proxy({}, { get:(t, k) => k in t ? t[k] : () => ({ addColorStop(){} }), set:(t, k, v) => (t[k] = v, true) }); },
     showModal(){ this.open = true; }, close(){ this.open = false; }
   };
   return el;
@@ -28,7 +28,8 @@ function boot(storage = {}, random = Math.random){
   const document = {
     hidden:false, activeElement:null,
     getElementById:id => elements[id] ??= makeElement(),
-    querySelectorAll:() => [], addEventListener(){}
+    querySelectorAll:() => [], addEventListener(){},
+    createElement:() => makeElement(), body:makeElement()
   };
   const localStorage = {
     getItem:k => Object.hasOwn(storage, k) ? storage[k] : null,
@@ -236,4 +237,112 @@ test("marcher range la canne pendant la pêche", () => {
   g.run("startFishing(fishSpots[0]);keys.ArrowLeft=true");
   g.tick(0.1);
   assert.equal(g.run("fishing"), null);
+});
+
+test("l'île est bien plus grande et garde ses zones interdites", () => {
+  const g = started();
+  assert.equal(g.run("walkable(900,0)"), true, "la côte est");
+  assert.equal(g.run("walkable(-900,0)"), true, "la forêt de l'ouest");
+  assert.equal(g.run("walkable(LAKE.x,LAKE.y)"), false, "on ne marche pas sur le lac");
+  assert.equal(g.run("walkable(LAKE.x+100,-730)"), false, "les falaises bloquent le passage");
+  assert.equal(g.run("walkable(PIER.x,PIER.y1-10)"), true, "le ponton avance sur la mer");
+  assert.equal(g.run("walkable(PIER.x+80,PIER.y1-10)"), false);
+  assert.equal(g.run("BRIDGES.every(b => walkable(riverAt(b), b))"), true, "chaque pont traverse la rivière");
+  assert.equal(g.run("walkable(riverAt(200),200)"), false);
+});
+
+test("le décor ne bloque ni le village ni la cabane", () => {
+  const g = started();
+  assert.equal(g.run("decoTrees.length > 100"), true);
+  assert.equal(g.run("decoTrees.some(t => Math.hypot(t.x-house.x, t.y-house.y) < 150)"), false);
+  assert.equal(g.run("decoTrees.some(t => Math.hypot(t.x-230, t.y-110) < 150)"), false);
+  assert.equal(g.run("[RACE_SIGN, LAKE_BENCH, ...RACE_POINTS.map(([x,y])=>({x,y}))].every(p => walkable(p.x,p.y) && !blocked(p.x,p.y))"), true);
+});
+
+test("le sprint va plus vite que la marche", () => {
+  const g = started();
+  g.run("player.x=-100;player.y=250;keys.ArrowDown=true");
+  g.tick(0.5);
+  const walk = g.run("player.y") - 250;
+  g.run("player.x=-100;player.y=250;player.vx=0;player.vy=0;keys.ShiftLeft=true");
+  g.tick(0.5);
+  assert.ok(g.run("player.y") - 250 > walk*1.3);
+});
+
+test("la course des lanternes se termine avec récompense et record", () => {
+  const g = started();
+  g.run("state.coins=0;state.energy=50;startRace()");
+  assert.equal(g.run("race.i"), 0);
+  g.run("for (const [x,y] of RACE_POINTS){ player.x=x; player.y=y; updateRace(0.5); }");
+  assert.equal(g.run("race"), null);
+  assert.ok(g.run("state.coins") > 25);
+  assert.ok(g.run("state.bestRace") > 0);
+});
+
+test("la course échoue quand le temps est écoulé", () => {
+  const g = started();
+  g.run("state.energy=50;startRace();player.x=-900;player.y=0;updateRace(RACE_LIMIT+1)");
+  assert.equal(g.run("race"), null);
+  assert.equal(g.run("state.bestRace"), 0);
+});
+
+test("photographier une créature remplit l'album une fois par espèce", () => {
+  const g = started();
+  g.run("state.coins=0;const c=critters.find(c=>c.sp==='crabe');photograph(c)");
+  assert.equal(g.run("state.album.crabe"), 1);
+  assert.equal(g.run("state.coins"), 20);
+  g.run("photograph(critters.filter(c=>c.sp==='crabe')[1])");
+  assert.equal(g.run("state.coins"), 24);
+  assert.equal(g.run("critters.find(c=>c.sp==='crabe').shy > 0"), true);
+});
+
+test("les papillons se cachent sous la pluie et les lucioles sortent la nuit", () => {
+  const g = started();
+  const b = "critters.find(c=>c.sp==='machaon')", f = "critters.find(c=>c.sp==='luciole')";
+  g.run("minutes=12*60;weather='sunny'");
+  assert.equal(g.run(`critterActive(${b})`), true);
+  assert.equal(g.run(`critterActive(${f})`), false);
+  g.run("weather='rain'");
+  assert.equal(g.run(`critterActive(${b})`), false);
+  g.run("minutes=23*60");
+  assert.equal(g.run(`critterActive(${f})`), true);
+});
+
+test("les coquillages se ramassent, se vendent et reviennent à l'aube", () => {
+  const g = started();
+  g.run("state.energy=50;near={obj:shells[0],label:'',type:'shell'};interact()");
+  assert.equal(g.run("state.inv.shells"), 1);
+  assert.equal(g.run("shells[0].picked"), true);
+  g.run("state.coins=0;openShop()");
+  g.click("sell-shells");
+  assert.equal(g.run("state.coins"), 12);
+  g.run("closeSheet();minutes=359.9");
+  g.tick(0.1);
+  assert.equal(g.run("shells[0].picked"), false);
+});
+
+test("la contemplation accélère le temps et se quitte d'une touche", () => {
+  const g = started();
+  g.run("minutes=600;setContemplation(true)");
+  g.tick(1);
+  assert.ok(g.run("minutes") - 600 > 25);
+  assert.ok(g.run("ZOOM < BASE_ZOOM"));
+  g.run("setContemplation(false)");
+  assert.equal(g.run("contemplating"), false);
+});
+
+test("un vœu sur une étoile filante n'est exaucé qu'une fois", () => {
+  const g = started();
+  g.run("shootingStar={x:100,y:50,vx:-400,vy:150,life:1.5,wished:false};state.coins=0;state.inv.fruit=0;state.energy=10;makeWish();makeWish()");
+  assert.equal(g.run("state.wishes"), 1);
+});
+
+test("album, record et coquillages sont sauvegardés", () => {
+  const g = started();
+  g.run("state.album={grenouille:2};state.bestRace=31.5;state.inv.shells=4;shells[2].picked=true;saveGame()");
+  const h = started({ ...g.storage });
+  assert.equal(h.run("state.album.grenouille"), 2);
+  assert.equal(h.run("state.bestRace"), 31.5);
+  assert.equal(h.run("state.inv.shells"), 4);
+  assert.equal(h.run("shells[2].picked"), true);
 });
