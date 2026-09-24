@@ -151,6 +151,16 @@
   #sheetFeedback{padding:10px;border-left:3px solid #8fa975;background:#edf3e5;margin:10px 0}
   @media(max-width:700px){#natureTools{left:10px;bottom:auto;top:calc(62px + env(safe-area-inset-top))}#natureTools button{padding:8px 10px;font-size:12px}#sheetBody{padding:0 16px 18px}.sheet-head{padding:12px 16px 6px}.sheet-head h2{font-size:20px}}
   @media(max-height:500px){#natureTools{bottom:auto;top:62px}dialog{max-height:calc(100dvh - 12px)}}
+
+  #fishing{position:fixed;left:50%;bottom:calc(200px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(340px,calc(100vw - 28px));padding:12px 16px;border-radius:22px;z-index:22;text-align:center;font-weight:900;font-size:13px}
+  #fishing[hidden]{display:none}
+  #fishBar{position:relative;height:22px;margin-top:9px;border-radius:11px;background:#cfe7ee;overflow:hidden}
+  #fishZone{position:absolute;top:0;bottom:0;background:#78b98b;border-radius:11px}
+  #fishCursor{position:absolute;top:-2px;bottom:-2px;width:8px;margin-left:-4px;border-radius:4px;background:#725244}
+  .request{display:flex;justify-content:space-between;gap:6px}
+  .request .hearts{display:inline-block;font-size:10px;letter-spacing:-1px}
+  @media (min-width:701px){ #tasks{ max-height:calc(100vh - 310px); overflow-y:auto; } }
+  @media(max-width:700px){#fishing{bottom:calc(195px + env(safe-area-inset-bottom))}}
 </style>
 </head>
 <body>
@@ -169,6 +179,8 @@
   <div id="taskTrees" class="task">🌳 Secouer des arbres : 0/3</div>
   <div id="taskFish" class="task">🐟 Attraper des poissons : 0/2</div>
   <div id="taskTalk" class="task">💬 Saluer les voisins : 0/3</div>
+  <small>Demandes des voisins</small>
+  <div id="requests"></div>
 </section>
 
 <section id="inventory" class="glass">
@@ -186,10 +198,11 @@
   <button type="button" id="inventoryToggle" class="hud-btn" aria-label="Afficher le sac" aria-expanded="false">🎒</button>
 </div>
 
-<div id="natureTools"><button id="journalBtn" type="button">📖 Carnet</button><button id="projectBtn" type="button">🌻 Projet</button></div>
+<div id="natureTools"><button id="journalBtn" type="button">📖 Carnet</button><button id="projectBtn" type="button">🌻 Projet</button><button id="soundBtn" type="button" aria-pressed="true">🔊 Son</button></div>
 <dialog id="natureSheet" aria-labelledby="sheetTitle"><div class="sheet-head"><h2 id="sheetTitle"></h2><button id="sheetClose" aria-label="Fermer" type="button">×</button></div><div id="sheetBody"></div></dialog>
 <div id="toast" role="status" aria-live="polite">Objet obtenu !</div>
 <div id="prompt" class="glass"><span class="key">E</span><span id="promptText">Interagir</span></div>
+<div id="fishing" class="glass" role="status" hidden><div id="fishText">🎣 Ferre quand le curseur est dans la zone verte !</div><div id="fishBar" aria-hidden="true"><div id="fishZone"></div><div id="fishCursor"></div></div></div>
 <div id="dialogue" class="glass"><div id="speaker">Villageois</div><div id="dialogueText"></div></div>
 
 <div id="celebration">
@@ -206,7 +219,7 @@
 </div>
 <button type="button" id="action" class="btn" aria-label="Interagir">E</button>
 <button type="button" id="eatBtn" class="btn" aria-label="Manger un fruit">🍎</button>
-<div id="hint">WASD / flèches · E : interagir · F : manger · glisse pour marcher</div>
+<div id="hint">WASD / flèches · E : interagir · F : manger · Échap : ranger la canne · glisse pour marcher</div>
 
 <script>
 "use strict";
@@ -240,6 +253,18 @@ function walkable(x, y){
   const inRiver = Math.abs(x - riverAt(y)) < 30;
   const onBridge = Math.abs(y) < 26;
   return !(inRiver && !onBridge);
+}
+
+/* Obstacles solides (coordonnées du monde) : le tronc des arbres, les voisins, la cabane. */
+function blocked(x, y){
+  if (Math.abs(x - house.x) < 38 && y > house.y - 28 && y < house.y + 4) return true;
+  for (const t of trees) if (Math.hypot(x - t.x, y - t.y) < 15) return true;
+  for (const v of villagers) if (Math.hypot(x - v.x, y - v.y) < 14) return true;
+  return false;
+}
+/* On peut toujours sortir d'un obstacle (sauvegarde ancienne, voisin déplacé). */
+function canStep(x, y){
+  return walkable(x, y) && (!blocked(x, y) || blocked(player.x, player.y));
 }
 
 const cam = { x: -150, y: 120 };
@@ -304,10 +329,73 @@ const state = {
   trees:0, fish:0, talked:0, coins:0,
   inv:{ fruit:0, fish:0, wood:0, flowers:0 },
   energy: 100,
-  day: 1
+  day: 1,
+  friend:{ Lili:0, Milo:0, Noisette:0 },
+  upgrades:{ rod:false, basket:false }
 };
 let drops = [], confetti = [], celebrated = false, busy = 0, minutes = 8*60;
 let lastSave = 0;
+
+/* ============ Voisins : amitié et demandes du jour ============ */
+const ITEM_ICONS = { fruit:"🍎", fish:"🐟", wood:"🪵", flowers:"🌼" };
+const REQUEST_POOLS = {
+  Lili:     [["flowers",2,4],["fruit",2,3]],
+  Milo:     [["fish",1,2],["wood",2,2]],
+  Noisette: [["fruit",2,4],["flowers",2,3]]
+};
+const MAX_FRIEND = 5;
+let requests = {};
+
+function newRequests(){
+  requests = {};
+  for (const [name, pool] of Object.entries(REQUEST_POOLS)){
+    /* Le bois reste réservé au coin de lecture tant qu'il n'est pas construit. */
+    const options = pool.filter(([item]) => item !== "wood" || nature.built);
+    const [item, min, max] = options[(Math.random()*options.length)|0];
+    requests[name] = { item, qty: min + ((Math.random()*(max - min + 1))|0), done:false };
+  }
+}
+function itemName(k, n){ return n > 1 && k !== "wood" ? ITEMS[k] + "s" : ITEMS[k]; }
+function hearts(name){
+  const n = state.friend[name] || 0;
+  return "♥".repeat(n) + "♡".repeat(MAX_FRIEND - n);
+}
+function requestLine(name){
+  const r = requests[name];
+  if (!r || r.done) return "";
+  return ` Tu pourrais m'apporter ${r.qty} ${ITEM_ICONS[r.item]} ${itemName(r.item, r.qty)} ? (${Math.min(state.inv[r.item], r.qty)}/${r.qty})`;
+}
+/* Livre la demande si le sac contient assez d'objets ; renvoie true en cas de livraison. */
+function deliverRequest(v){
+  const r = requests[v.name];
+  if (!r || r.done || state.inv[r.item] < r.qty) return false;
+  state.inv[r.item] -= r.qty;
+  r.done = true;
+  const reward = 10 + r.qty * 8;
+  state.coins += reward;
+  const before = state.friend[v.name] || 0;
+  state.friend[v.name] = Math.min(MAX_FRIEND, before + 1);
+  partySound();
+  say(`${v.name} ${hearts(v.name)}`, `Merci infiniment ! C'est exactement ce qu'il me fallait. Voici ${reward} pièces pour toi.`);
+  toast(state.friend[v.name] === MAX_FRIEND && before < MAX_FRIEND
+    ? `💖 ${v.name} est maintenant ton ami·e pour la vie !`
+    : `💝 Demande livrée : +${reward} pièces, amitié avec ${v.name} +1`);
+  return true;
+}
+function villagerLine(v){
+  if (v.name === "Lili" && !nature.built) return "J’ai laissé une graine près de ta cabane. Fais-la pousser ; nous créerons un jardin des découvertes ensemble !";
+  if (v.name === "Lili" && !v.talked) return "Ton jardin est devenu mon endroit préféré. Ouvre ton carnet : nous avons tant de choses à observer !";
+  if (v.name === "Milo" && !nature.built) return "Garde cinq morceaux de bois : je t’aiderai à aménager le coin de lecture de Lili.";
+  if (v.name === "Noisette" && nature.seen.length < 3) return "La Gala est douce, la Granny Smith acidulée. Deux variétés, deux saveurs à découvrir !";
+  if ((state.friend[v.name] || 0) >= MAX_FRIEND && Math.random() < 0.4) return "Quelle chance de t’avoir comme ami·e ! L’île est plus douce avec toi.";
+  return v.lines[(Math.random()*v.lines.length)|0];
+}
+
+/* ============ Améliorations achetées chez Pépé ============ */
+const UPGRADES = {
+  rod:    { name:"Canne à pêche souple", icon:"🎣", price:60, text:"La zone verte de la pêche s’élargit." },
+  basket: { name:"Panier d’osier",       icon:"🧺", price:45, text:"Une pomme de plus à chaque récolte." }
+};
 
 /* ============ Atelier nature : découvrir, expérimenter, transmettre ============ */
 const APPLES = {
@@ -382,7 +470,7 @@ function openProject(){
 const PRICES={fruit:9,fish:22,wood:14,flowers:5};
 const ITEMS={fruit:"fruit",fish:"poisson",wood:"bois",flowers:"fleur"};
 function openShop(feedback=""){
-  openSheet("L’étal de Pépé",`<div class="eyebrow">${state.coins} pièces · Tu choisis ce que tu vends</div>${feedback?`<div id="sheetFeedback" role="status">${feedback}</div>`:''}<p>Les fruits peuvent être mangés ; garde 5 bois pour le jardin de Lili.</p>${Object.keys(PRICES).map(k=>`<div class="nature-card"><strong>${ITEMS[k]} · ${state.inv[k]} dans le sac</strong><br>${actionButton(`Vendre 1 ${ITEMS[k]} · +${PRICES[k]} pièces`,`sell-${k}`,state.inv[k]<1)}</div>`).join('')}<h3>Une lumière pour le jardin</h3><p>Une lanterne éclairera le coin de lecture à la nuit tombée.</p>${actionButton(nature.lantern?'Lanterne installée':'Acheter la lanterne · 50 pièces','lantern',nature.lantern||!nature.built||state.coins<50)}${!nature.built?'<p class="note">À débloquer en construisant le coin de lecture.</p>':''}`);
+  openSheet("L’étal de Pépé",`<div class="eyebrow">${state.coins} pièces · Tu choisis ce que tu vends</div>${feedback?`<div id="sheetFeedback" role="status">${feedback}</div>`:''}<p>Les fruits peuvent être mangés ; garde 5 bois pour le jardin de Lili.</p>${Object.keys(PRICES).map(k=>`<div class="nature-card"><strong>${ITEMS[k]} · ${state.inv[k]} dans le sac</strong><br>${actionButton(`Vendre 1 ${ITEMS[k]} · +${PRICES[k]} pièces`,`sell-${k}`,state.inv[k]<1)}</div>`).join('')}<h3>Une lumière pour le jardin</h3><p>Une lanterne éclairera le coin de lecture à la nuit tombée.</p>${actionButton(nature.lantern?'Lanterne installée':'Acheter la lanterne · 50 pièces','lantern',nature.lantern||!nature.built||state.coins<50)}${!nature.built?'<p class="note">À débloquer en construisant le coin de lecture.</p>':''}<h3>Outils pour l’aventure</h3>${Object.entries(UPGRADES).map(([k,u])=>`<div class="nature-card"><strong>${u.icon} ${u.name}</strong><br><small>${u.text}</small><br>${actionButton(state.upgrades[k]?'Déjà dans ton sac':`Acheter · ${u.price} pièces`,`buy-${k}`,state.upgrades[k]||state.coins<u.price)}</div>`).join('')}`);
 }
 sheetBody.addEventListener("click",e=>{
   const button=e.target.closest("button[data-nature]");if(!button||button.disabled)return;
@@ -404,6 +492,8 @@ sheetBody.addEventListener("click",e=>{
     state.inv.wood-=5;state.coins-=20;nature.built=true;const lili=villagers.find(v=>v.name==='Lili');lili.x=readingCorner.x+18;lili.y=readingCorner.y+16;partySound();openProject();toast("🌻 Ton jardin des découvertes prend vie !");
   }else if(action.startsWith('sell-')){
     const k=action.slice(5);if(Object.hasOwn(PRICES,k)&&state.inv[k]>0){state.inv[k]--;state.coins+=PRICES[k];openShop(`Vendu : 1 ${ITEMS[k]}. Le reste de ton sac est conservé.`);}
+  }else if(action.startsWith('buy-')){
+    const k=action.slice(4);if(Object.hasOwn(UPGRADES,k)&&!state.upgrades[k]&&state.coins>=UPGRADES[k].price){state.coins-=UPGRADES[k].price;state.upgrades[k]=true;dingSound();openShop(`${UPGRADES[k].icon} ${UPGRADES[k].name} rejoint ton sac : ${UPGRADES[k].text}`);}
   }else if(action==='lantern'&&nature.built&&!nature.lantern&&state.coins>=50){state.coins-=50;nature.lantern=true;openShop("La lanterne est installée près du banc. Reviens la voir à la nuit tombée !");}
   refreshUI();saveGame();
 });
@@ -561,19 +651,51 @@ function sx(x){ return (x - cam.x) * ZOOM + W/2; }
 function sy(y){ return (y - cam.y) * SQ * ZOOM + H/2; }
 
 /* ============ Audio ============ */
-let AC = null;
+let AC = null, master = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem("cozyBearIsland_sound") !== "off"; } catch(e){}
 function unlockAudio(){
-  if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (C) AC = new C(); }
+  if (!AC) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (C){ AC = new C(); master = AC.createGain(); master.gain.value = soundOn ? 1 : 0; master.connect(AC.destination); }
+  }
   if (AC && AC.state === "suspended") AC.resume();
 }
-function tone(f, d=0.12, delay=0, vol=0.07){
-  if (!AC) return;
+function tone(f, d=0.12, delay=0, vol=0.07, type="sine"){
+  if (!AC || !soundOn) return;
   const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime + delay;
-  o.type = "sine"; o.frequency.setValueAtTime(f, t);
+  o.type = type; o.frequency.setValueAtTime(f, t);
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + 0.04);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.04);
+}
+function setSound(on){
+  soundOn = on;
+  if (master) master.gain.value = on ? 1 : 0;
+  const btn = document.getElementById("soundBtn");
+  btn.textContent = on ? "🔊 Son" : "🔇 Muet";
+  btn.setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem("cozyBearIsland_sound", on ? "on" : "off"); } catch(e){}
+}
+document.getElementById("soundBtn").addEventListener("click", () => { unlockAudio(); setSound(!soundOn); });
+setSound(soundOn);
+
+/* Musique d'ambiance : une mélodie pentatonique douce, plus grave la nuit et plus rare sous la pluie. */
+const SCALE = [262, 294, 330, 392, 440, 523, 587, 659];
+let musicClock = 1.5, musicNote = 3, musicBeat = 0;
+function updateMusic(dt){
+  if (!AC || !soundOn) return;
+  musicClock -= dt;
+  if (musicClock > 0) return;
+  musicClock = 0.55 + Math.random()*0.35;
+  const hour = minutes / 60, night = hour >= 20 || hour < 6;
+  const rainy = weather === "rain" || weather === "storm";
+  if (Math.random() < (rainy ? 0.55 : 0.25)) return;
+  musicNote = Math.max(0, Math.min(SCALE.length - 1, musicNote + ((Math.random()*5)|0) - 2));
+  const k = night ? 0.5 : 1;
+  tone(SCALE[musicNote] * k, 1.1, 0, 0.018, "triangle");
+  if (musicBeat++ % 4 === 0) tone(SCALE[[0, 3, 4, 2][(musicBeat/4|0) % 4]] * k / 2, 2.2, 0, 0.014, "sine");
 }
 const dingSound = () => { tone(523,.12); tone(659,.12,.09); tone(784,.18,.18); };
 const partySound = () => [523,659,784,1046].forEach((n,i) => tone(n,.35,i*.13,.09));
@@ -600,7 +722,8 @@ function refreshUI(){
   const objective=document.getElementById("objective"), nextObjective=objectiveText();
   if(objective.textContent!==nextObjective)objective.textContent=nextObjective;
   const signature = [state.trees,state.fish,state.talked,state.coins,state.inv.fruit,state.inv.fish,
-    state.inv.wood,state.inv.flowers,Math.round(state.energy),weather,celebrated].join("|");
+    state.inv.wood,state.inv.flowers,Math.round(state.energy),weather,celebrated,
+    JSON.stringify(requests),JSON.stringify(state.friend)].join("|");
   if (signature === lastUISignature) return;
   lastUISignature = signature;
   const t = document.getElementById("taskTrees"),
@@ -612,6 +735,10 @@ function refreshUI(){
   t.classList.toggle("done", state.trees >= 3);
   f.classList.toggle("done", state.fish >= 2);
   v.classList.toggle("done", state.talked >= 3);
+  document.getElementById("requests").innerHTML = Object.entries(requests).map(([name, r]) => {
+    const have = Math.min(state.inv[r.item], r.qty);
+    return `<div class="task request${r.done ? " done" : ""}"><span>${name} : ${r.qty} ${ITEM_ICONS[r.item]}${r.done ? "" : ` (${have}/${r.qty})`}</span><span class="hearts" aria-label="Amitié ${state.friend[name] || 0} sur ${MAX_FRIEND}">${hearts(name)}</span></div>`;
+  }).join("");
   document.getElementById("currency").textContent = `🪙 ${state.coins}`;
   document.getElementById("fruitCount").textContent = state.inv.fruit;
   document.getElementById("fishCount").textContent = state.inv.fish;
@@ -650,7 +777,7 @@ function celebrate(){
 /* ============ Sauvegarde ============ */
 function saveGame(){
   const data = {
-    version:3, nature,
+    version:4, nature,
     flowerLayout:flowers.map(f=>({x:f.x,y:f.y,c:f.c,phase:f.phase})),
     player: { x: player.x, y: player.y },
     state,
@@ -662,7 +789,8 @@ function saveGame(){
     fishSpots: fishSpots.map(s => s.used),
     flowers: flowers.map(f => f.picked),
     villagers: villagers.map(v => v.talked),
-    houseRest: house.restUsed
+    houseRest: house.restUsed,
+    requests
   };
   try { localStorage.setItem("cozyBearIsland_v3", JSON.stringify(data)); } catch(e){}
 }
@@ -678,6 +806,9 @@ function loadGame(){
       for(const k of Object.keys(state.inv))
         if(Number.isFinite(data.state.inv?.[k]))state.inv[k]=Math.max(0,Math.floor(data.state.inv[k]));
       state.energy=Math.min(100,state.energy);state.day=Math.max(1,Math.floor(state.day));
+      for(const k of Object.keys(state.friend))
+        if(Number.isFinite(data.state.friend?.[k]))state.friend[k]=Math.max(0,Math.min(MAX_FRIEND,Math.floor(data.state.friend[k])));
+      for(const k of Object.keys(state.upgrades))state.upgrades[k]=data.state.upgrades?.[k]===true;
     }
     if(data.nature && typeof data.nature==='object'){
       for(const k of ["planted","sunny","checked","grown","built","lantern","welcome"])nature[k]=data.nature[k]===true;
@@ -697,6 +828,13 @@ function loadGame(){
     if (Array.isArray(data.flowers)) flowers.forEach((f,i) => f.picked = !!data.flowers[i]);
     if (Array.isArray(data.villagers)) villagers.forEach((v,i) => v.talked = !!data.villagers[i]);
     if (data.houseRest) house.restUsed = data.houseRest;
+    if (data.requests && typeof data.requests === "object"){
+      for (const name of Object.keys(REQUEST_POOLS)){
+        const r = data.requests[name];
+        if (r && Object.hasOwn(ITEM_ICONS, r.item) && Number.isInteger(r.qty) && r.qty > 0 && r.qty <= 9)
+          requests[name] = { item:r.item, qty:r.qty, done:r.done === true };
+      }
+    }
   } catch(e){}
 }
 
@@ -717,6 +855,12 @@ function scanNear(){
   test(garden,45,"Observer le jardin","garden");
   test(readingCorner,60,"Le projet de Lili","project");
 
+  if (fishing){
+    document.getElementById("action").textContent = "Ferrer";
+    document.getElementById("action").setAttribute("aria-label","Ferrer la ligne");
+    document.getElementById("prompt").classList.remove("visible");
+    return;
+  }
   const p = document.getElementById("prompt");
   const labels={tree:"Récolter",fish:"Pêcher",villager:"Parler",flower:"Cueillir",house:"Repos",garden:"Jardiner",project:"Projet"};
   document.getElementById("action").textContent=near?labels[near.type]:"Explorer";
@@ -727,24 +871,36 @@ function scanNear(){
   } else p.classList.remove("visible");
 }
 
+/* Coût en énergie des activités ; la marche et la discussion restent libres. */
+const ENERGY_COST = { tree:4, fish:6, flower:1 };
+function tooTired(type){
+  const cost = ENERGY_COST[type] || 0;
+  if (state.energy >= cost) return false;
+  toast("😴 Trop fatigué·e : mange une pomme (F) ou repose-toi à la cabane.");
+  return true;
+}
+
 function interact(){
   unlockAudio();
+  if (fishing){ reel(); return; }
   if (sheet.open || busy > 0 || !near) return;
   if (navigator.vibrate) navigator.vibrate(18);
   const { obj, type } = near;
 
   if(type === "garden"){openGarden();return;}
   if(type === "project"){openProject();return;}
+  if (tooTired(type)) return;
   if (type === "tree"){
     obj.used = true; obj.shake = 1.1;
     discoverApple(obj.variety);
     state.trees = Math.min(3, state.trees + 1);
     const bonus = (weather === "rain" || weather === "storm") ? 1 : 0;
-    state.inv.fruit += 3 + bonus;
+    const basket = state.upgrades.basket ? 1 : 0;
+    state.inv.fruit += 3 + bonus + basket;
     state.inv.wood += 1;
     state.coins += 15 + (bonus ? 5 : 0);
     state.energy = Math.max(0, state.energy - 4);
-    for (let i = 0; i < 3 + bonus; i++){
+    for (let i = 0; i < 3 + bonus + basket; i++){
       drops.push({ x: obj.x + (Math.random()-.5)*30, y: obj.y + (Math.random()-.5)*20,
                    z: 120, vz: 10, vx:(Math.random()-.5)*60, vy:(Math.random()-.5)*40, life:1.6 });
     }
@@ -760,45 +916,34 @@ function interact(){
       });
     }
     dingSound();
-    toast(bonus ? "🍎 Fruits + bois (bonus pluie !)" : "🍎 3 fruits, 🪵 1 bois, +15 pièces");
+    const fruits = 3 + bonus + basket;
+    toast(`🍎 ${fruits} fruits, 🪵 1 bois, +${15 + (bonus ? 5 : 0)} pièces${bonus ? " (bonus pluie !)" : ""}`);
   }
 
   else if (type === "fish"){
-    obj.used = true; busy = 1.1;
-    state.energy = Math.max(0, state.energy - 6);
-    toast("🎣 Ça mord...");
-    setTimeout(() => {
-      const bonus = (weather === "rain" || weather === "storm") ? 8 : 0;
-      state.fish = Math.min(2, state.fish + 1);
-      state.inv.fish += 1;
-      state.coins += 25 + bonus;
-      dingSound();
-      toast(bonus ? `🐟 Poisson attrapé ! +${25+bonus} pièces (pluie)` : "🐟 Poisson attrapé ! +25 pièces");
-      refreshUI();
-      saveGame();
-    }, 1050);
+    startFishing(obj);
   }
 
   else if (type === "villager"){
-    const lines = obj.lines || ["Bonjour !"];
-    const line = lines[(Math.random()*lines.length)|0];
-    say(obj.name, obj.name==='Lili'?(nature.built?"Ton jardin est devenu mon endroit préféré. Ouvre ton carnet : nous avons tant de choses à observer !":"J’ai laissé une graine près de ta cabane. Fais-la pousser ; nous créerons un jardin des découvertes ensemble !"):obj.name==='Milo'?"Garde cinq morceaux de bois : je t’aiderai à aménager le coin de lecture de Lili.":obj.name==='Noisette'?"La Gala est douce, la Granny Smith acidulée. Deux variétés, deux saveurs à découvrir !":line);
     tone(440,.08); tone(554,.1,.08);
 
     if (obj.name === "Pépé"){
+      say(obj.name, obj.lines[(Math.random()*obj.lines.length)|0]);
       openShop();
-    } else {
+    } else if (!deliverRequest(obj)){
+      say(`${obj.name} ${hearts(obj.name)}`, villagerLine(obj) + requestLine(obj.name));
+    }
+    if (obj.name !== "Pépé"){
       if (!obj.talked){
         obj.talked = true;
         state.talked++;
         state.coins += 10;
-        if (Math.random() < 0.35){
+        if (Math.random() < 0.35 + (state.friend[obj.name] || 0) * 0.1){
           state.inv.fruit += 1;
           toast("🎁 " + obj.name + " t'offre un fruit !");
         }
       }
     }
-    state.energy = Math.max(0, state.energy - 2);
   }
 
   else if (type === "flower"){
@@ -826,9 +971,61 @@ function interact(){
   saveGame();
 }
 
+/* ============ Pêche : un petit jeu d'adresse ============ */
+let fishing = null;
+function fishZoneWidth(){
+  let w = 0.24;
+  if (weather === "rain" || weather === "storm") w += 0.06; // Sous la pluie, les poissons mordent mieux.
+  if (state.upgrades.rod) w += 0.1;
+  return w;
+}
+function startFishing(spot){
+  const width = fishZoneWidth();
+  fishing = { spot, pos:0, dir:1, speed:0.75 + Math.random()*0.25, zone:[0.25 + Math.random()*(0.7 - width), 0] };
+  fishing.zone[1] = fishing.zone[0] + width;
+  state.energy = Math.max(0, state.energy - ENERGY_COST.fish);
+  clearControls();
+  const zone = document.getElementById("fishZone");
+  zone.style.left = fishing.zone[0]*100 + "%";
+  zone.style.width = width*100 + "%";
+  document.getElementById("fishText").textContent = "🎣 Ferre quand le curseur passe dans la zone verte !";
+  document.getElementById("fishing").hidden = false;
+  tone(330,.08);
+}
+function updateFishing(dt){
+  if (!fishing) return;
+  fishing.pos += fishing.dir * fishing.speed * dt;
+  if (fishing.pos >= 1){ fishing.pos = 1; fishing.dir = -1; }
+  if (fishing.pos <= 0){ fishing.pos = 0; fishing.dir = 1; }
+  document.getElementById("fishCursor").style.left = fishing.pos*100 + "%";
+}
+function stopFishing(){
+  fishing = null;
+  document.getElementById("fishing").hidden = true;
+}
+function reel(){
+  if (!fishing) return;
+  const { spot, pos, zone } = fishing;
+  stopFishing();
+  if (pos < zone[0] || pos > zone[1]){
+    tone(220,.18);
+    toast("💦 Le poisson s’est échappé… Réessaie quand tu veux !");
+  } else {
+    spot.used = true;
+    const bonus = (weather === "rain" || weather === "storm") ? 8 : 0;
+    state.fish = Math.min(2, state.fish + 1);
+    state.inv.fish += 1;
+    state.coins += 25 + bonus;
+    dingSound();
+    toast(bonus ? `🐟 Poisson attrapé ! +${25+bonus} pièces (pluie)` : "🐟 Poisson attrapé ! +25 pièces");
+  }
+  refreshUI();
+  saveGame();
+}
+
 function eatFruit(){
   unlockAudio();
-  if (sheet.open || state.inv.fruit <= 0 || busy > 0) return;
+  if (sheet.open || fishing || state.inv.fruit <= 0 || busy > 0) return;
   if (navigator.vibrate) navigator.vibrate(12);
   state.inv.fruit--;
   state.energy = Math.min(100, state.energy + 28);
@@ -844,6 +1041,7 @@ addEventListener("keydown", e => {
   if(sheet.open)return;
   if(e.target.closest("button,a,input,select") && ["Enter","Space"].includes(e.code))return;
   keys[e.code] = true;
+  if (e.code === "Escape" && fishing){ stopFishing(); toast("🎣 Tu ranges ta canne."); return; }
   if (e.code === "KeyE" || e.code === "Space" || e.code === "Enter"){
     e.preventDefault(); if (!e.repeat) interact();
   }
@@ -1159,6 +1357,7 @@ function step(now){
   updateGarden(dt);
 
   updateWeather(dt);
+  updateMusic(dt);
   clouds.forEach(c => {
     c.x += c.speed * (0.3 + wind*0.7) * dt;
     if (c.x > W + 200) c.x = -250;
@@ -1171,6 +1370,12 @@ function step(now){
   if (keys.KeyW || keys.ArrowUp    || pad.up)    iy -= 1;
   if (stick){ ix += stick.dx; iy += stick.dy; }
   if (busy > 0){ ix = 0; iy = 0; busy -= dt; }
+  if (fishing){
+    /* Marcher range la canne : utile sur mobile, sans touche Échap. */
+    if (Math.hypot(ix, iy) > 0.5){ stopFishing(); toast("🎣 Tu ranges ta canne."); }
+    else updateFishing(dt);
+    ix = 0; iy = 0;
+  }
 
   const len = Math.hypot(ix, iy);
   if (len > 1){ ix /= len; iy /= len; }
@@ -1181,8 +1386,8 @@ function step(now){
   player.vy += (iy*SPEED - player.vy) * Math.min(1, dt*12);
 
   const nx = player.x + player.vx*dt, ny = player.y + player.vy*dt;
-  if (walkable(nx, player.y)) player.x = nx; else player.vx = 0;
-  if (walkable(player.x, ny)) player.y = ny; else player.vy = 0;
+  if (canStep(nx, player.y)) player.x = nx; else player.vx = 0;
+  if (canStep(player.x, ny)) player.y = ny; else player.vy = 0;
 
   const speed = Math.hypot(player.vx, player.vy);
   const moving = speed > 12;
@@ -1215,6 +1420,7 @@ function step(now){
     flowers.forEach(f => f.picked = false);
     celebrated = false;
     state.day++;
+    newRequests();
     toast(`🌅 Jour ${state.day} — nouvelles missions !`);
     saveGame();
   }
@@ -1305,6 +1511,7 @@ addEventListener("blur",clearControls);
 addEventListener("pagehide",saveGame);
 document.addEventListener("visibilitychange",()=>{if(document.hidden){clearControls();saveGame();}});
 loadGame();
+if (Object.keys(requests).length < Object.keys(REQUEST_POOLS).length) newRequests();
 refreshUI();
 if(!nature.welcome){
   nature.welcome=true;
